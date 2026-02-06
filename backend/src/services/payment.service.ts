@@ -1,13 +1,13 @@
 import { prisma } from '../config/database.js';
 import { InsufficientFundsError } from '../utils/errors.js';
 
-interface MerchantPaymentInput {
+export interface MerchantPaymentInput {
   userId: string;
   merchantId: string;
   amount: number;
   currency: string;
   paymentMethod?: string;
-  paymentType?: string;
+  paymentType?: 'nfc' | 'qr';
   nfcNonce?: string;
 }
 
@@ -37,21 +37,25 @@ export class PaymentService {
       }
 
       // Deduct from wallet balance (convert cents to dollars for database)
+      const amountInDollars = input.amount / 100;
       await tx.wallet.update({
         where: { id: wallet.id },
         data: {
           balance: {
-            decrement: input.amount / 100,
+            decrement: amountInDollars,
           },
         },
       });
+
+      // Map payment type to enum values
+      const paymentTypeEnum = input.paymentType === 'qr' ? 'QR' : 'NFC';
 
       // Create transaction record
       const transaction = await tx.transaction.create({
         data: {
           walletId: wallet.id,
           type: 'PAYMENT',
-          amount: input.amount / 100,
+          amount: amountInDollars,
           status: 'PENDING',
           metadata: {
             merchantId: input.merchantId,
@@ -67,7 +71,7 @@ export class PaymentService {
         data: {
           transactionId: transaction.id,
           merchantId: input.merchantId,
-          paymentType: input.paymentType || 'nfc',
+          paymentType: paymentTypeEnum,
           nfcNonce: input.nfcNonce,
         },
       });
@@ -79,13 +83,19 @@ export class PaymentService {
         data: { status: 'COMPLETED' },
       });
 
+      // Fetch the updated wallet balance to return accurate newBalance
+      const updatedWallet = await tx.wallet.findUnique({
+        where: { id: wallet.id },
+        select: { balance: true },
+      });
+
       return {
         paymentId: transaction.id,
         status: 'completed',
-        amount: input.amount / 100,
+        amount: amountInDollars,
         currency: input.currency,
         timestamp: transaction.createdAt,
-        newBalance: wallet.balance.toNumber() - (input.amount / 100),
+        newBalance: updatedWallet?.balance.toNumber() ?? wallet.balance.toNumber() - amountInDollars,
       };
     });
   }

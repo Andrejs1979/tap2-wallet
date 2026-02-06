@@ -24,6 +24,11 @@ enum TransactionType {
   WITHDRAW
 }
 
+enum PaymentType {
+  NFC
+  QR
+}
+
 enum P2PTransferStatus {
   PENDING
   COMPLETED
@@ -129,7 +134,7 @@ model MerchantPayment {
   transactionId  String        @unique @map("transaction_id")
   merchantId     String        @map("merchant_id")
   paymentMethodId String?       @map("payment_method_id")
-  paymentType    String        @map("payment_type") // 'nfc', 'qr'
+  paymentType    PaymentType   @map("payment_type") // 'nfc', 'qr'
   qrCodeId       String?       @map("qr_code_id")
   nfcNonce       String?       @map("nfc_nonce")
   tipAmount      Decimal       @default(0) @map("tip_amount") @db.Decimal(10, 2)

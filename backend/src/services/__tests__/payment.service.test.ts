@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PaymentService } from '../payment.service.js';
 import { InsufficientFundsError } from '../../utils/errors.js';
 import { prisma } from '../../config/database.js';
+import type { MerchantPaymentInput } from '../payment.service.js';
 
 // Mock Prisma client
 vi.mock('../../config/database.js', () => ({
@@ -48,7 +49,7 @@ describe('PaymentService', () => {
     };
 
     it('should successfully process a payment with sufficient balance', async () => {
-      const input = {
+      const input: MerchantPaymentInput = {
         userId: 'user-123',
         merchantId: 'merchant-123',
         amount: 5000, // $50.00 in cents
@@ -61,7 +62,9 @@ describe('PaymentService', () => {
         // Mock the transaction callback
         const tx = {
           wallet: {
-            findUnique: vi.fn().mockResolvedValue(mockWallet),
+            findUnique: vi.fn()
+              .mockResolvedValueOnce(mockWallet)
+              .mockResolvedValueOnce({ balance: { toNumber: () => 50.0 } }),
             update: vi.fn().mockResolvedValue(mockWallet),
           },
           transaction: {
