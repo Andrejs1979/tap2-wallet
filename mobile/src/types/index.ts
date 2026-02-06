@@ -7,6 +7,15 @@ export interface User {
   kycVerified: boolean;
 }
 
+export interface Transaction {
+  id: string;
+  amount: number;
+  type: 'payment' | 'p2p' | 'fund' | 'withdraw';
+  status: 'pending' | 'completed' | 'failed';
+  createdAt: Date;
+  metadata?: Record<string, unknown>;
+}
+
 export interface Payment {
   id: string;
   amount: number;

@@ -1,17 +1,11 @@
 import { create } from 'zustand';
+import type { Transaction } from '@/types';
 
 interface WalletState {
   balance: number;
   transactions: Transaction[];
   setBalance: (balance: number) => void;
   addTransaction: (transaction: Transaction) => void;
-}
-
-interface Transaction {
-  id: string;
-  amount: number;
-  type: 'payment' | 'p2p' | 'fund' | 'withdraw';
-  createdAt: Date;
 }
 
 export const useWalletStore = create<WalletState>((set) => ({
