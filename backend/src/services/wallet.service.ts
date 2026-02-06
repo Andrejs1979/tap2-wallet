@@ -24,7 +24,8 @@ export class WalletService {
     endDate?: Date,
     type?: string
   ) {
-    const where: any = { walletId: userId };
+    // Build transaction filter conditions
+    const where: { type?: string; createdAt?: { gte?: Date; lte?: Date } } = {};
 
     // Add filters if provided
     if (type) {
@@ -37,17 +38,18 @@ export class WalletService {
       where.createdAt = { ...where.createdAt, lte: endDate };
     }
 
+    // Fetch wallet by userId first, then use its actual ID for transactions
     const wallet = await prisma.wallet.findFirst({
       where: { userId },
       select: {
         id: true,
-      transactions: {
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
+        transactions: {
+          where,
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip: offset,
+        },
       },
-    },
     });
 
     if (!wallet) {

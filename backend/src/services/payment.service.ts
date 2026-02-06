@@ -29,16 +29,19 @@ export class PaymentService {
       }
 
       // Check balance with Decimal comparison
-      if (wallet.balance.toNumber() < input.amount) {
+      // Note: input.amount is in cents (integer), wallet.balance is Decimal
+      // Convert for comparison: wallet.balance is in dollars, input.amount needs to match
+      const walletBalanceCents = wallet.balance.toNumber() * 100;
+      if (walletBalanceCents < input.amount) {
         throw new InsufficientFundsError('Insufficient wallet balance');
       }
 
-      // Deduct from wallet balance
+      // Deduct from wallet balance (convert cents to dollars for database)
       await tx.wallet.update({
         where: { id: wallet.id },
         data: {
           balance: {
-            decrement: input.amount,
+            decrement: input.amount / 100,
           },
         },
       });
@@ -47,9 +50,9 @@ export class PaymentService {
       const transaction = await tx.transaction.create({
         data: {
           walletId: wallet.id,
-          type: 'payment',
-          amount: input.amount,
-          status: 'pending',
+          type: 'PAYMENT',
+          amount: input.amount / 100,
+          status: 'PENDING',
           metadata: {
             merchantId: input.merchantId,
             paymentMethod: input.paymentMethod || 'default',
@@ -73,16 +76,16 @@ export class PaymentService {
       // For now, mark as completed immediately
       await tx.transaction.update({
         where: { id: transaction.id },
-        data: { status: 'completed' },
+        data: { status: 'COMPLETED' },
       });
 
       return {
         paymentId: transaction.id,
         status: 'completed',
-        amount: input.amount,
+        amount: input.amount / 100,
         currency: input.currency,
         timestamp: transaction.createdAt,
-        newBalance: wallet.balance.toNumber() - input.amount,
+        newBalance: wallet.balance.toNumber() - (input.amount / 100),
       };
     });
   }
@@ -122,7 +125,7 @@ export class PaymentService {
       // Update transaction status
       const updated = await tx.transaction.update({
         where: { id: paymentId },
-        data: { status: 'completed' },
+        data: { status: 'COMPLETED' },
       });
 
       // Update merchant payment completed timestamp
@@ -162,7 +165,7 @@ export class PaymentService {
       await tx.transaction.update({
         where: { id: paymentId },
         data: {
-          status: 'failed',
+          status: 'FAILED',
           metadata: {
             failureReason: reason,
           },
@@ -181,7 +184,7 @@ export class PaymentService {
       where: { userId },
       include: {
         transactions: {
-          where: { type: 'payment' },
+          where: { type: 'PAYMENT' },
           include: {
             merchantPayment: {
               include: {
@@ -203,7 +206,7 @@ export class PaymentService {
     return wallet.transactions.map((tx) => ({
       id: tx.id,
       amount: tx.amount.toNumber(),
-      status: tx.status,
+      status: tx.status.toLowerCase(),
       createdAt: tx.createdAt,
       merchant: tx.merchantPayment?.merchant.businessName || null,
     }));

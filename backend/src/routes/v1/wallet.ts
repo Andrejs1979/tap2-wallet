@@ -1,12 +1,13 @@
-import { Router } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { WalletService } from '../../services/wallet.service.js';
 import { transactionListSchema, validateQuery } from '../../utils/validation.js';
+import type { TransactionListInput } from '../../utils/validation.js';
 
 export const walletRouter = Router();
 const walletService = new WalletService();
 
 // GET /api/v1/wallet/balance
-walletRouter.get('/balance', async (req, res) => {
+walletRouter.get('/balance', async (req: Request, res: Response, next: NextFunction) => {
   try {
     // User is attached by authentication middleware
     const userId = req.user!.id;
@@ -14,32 +15,28 @@ walletRouter.get('/balance', async (req, res) => {
     const balance = await walletService.getBalance(userId);
     res.json({ balance });
   } catch (error) {
-    res.status(500).json({
-      error: error instanceof Error ? error.message : 'Failed to fetch balance'
-    });
+    next(error); // Pass to error handler middleware
   }
 });
 
 // GET /api/v1/wallet/transactions
-walletRouter.get('/transactions', validateQuery(transactionListSchema), async (req, res) => {
+walletRouter.get('/transactions', validateQuery(transactionListSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
-    const { limit, offset, startDate, endDate, type } = req.query as any;
+    const { limit, offset, startDate, endDate, type } = req.query as TransactionListInput;
 
     const transactions = await walletService.getTransactions(
       userId,
-      Number(limit),
-      Number(offset),
+      limit,
+      offset,
       startDate ? new Date(startDate) : undefined,
       endDate ? new Date(endDate) : undefined,
-      type as string | undefined
+      type
     );
 
     res.json({ transactions });
   } catch (error) {
-    res.status(500).json({
-      error: error instanceof Error ? error.message : 'Failed to fetch transactions'
-    });
+    next(error); // Pass to error handler middleware
   }
 });
 

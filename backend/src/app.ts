@@ -13,10 +13,14 @@ export function createApp(): Express {
   // Security middleware
   app.use(helmet());
 
-  // CORS - Configure specific origins based on environment
-  const allowedOrigins = process.env.NODE_ENV === 'production'
-    ? ['https://tap2wallet.com', 'https://app.tap2wallet.com']
-    : ['http://localhost:3000', 'http://localhost:19006', 'http://localhost:8081'];
+  // CORS - Configure from environment variable or use defaults
+  // Format: CORS_ORIGINS=https://example.com,https://app.example.com
+  const corsOriginsEnv = process.env.CORS_ORIGINS;
+  const allowedOrigins = corsOriginsEnv
+    ? corsOriginsEnv.split(',').map(origin => origin.trim())
+    : process.env.NODE_ENV === 'production'
+      ? ['https://tap2wallet.com', 'https://app.tap2wallet.com']
+      : ['http://localhost:3000', 'http://localhost:19006', 'http://localhost:8081'];
 
   app.use(cors({
     origin: allowedOrigins,

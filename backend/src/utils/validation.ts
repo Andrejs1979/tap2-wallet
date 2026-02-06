@@ -90,11 +90,12 @@ export const p2pRequestSchema = z.object({
 export type P2PRequestInput = z.infer<typeof p2pRequestSchema>;
 
 // ==================== Auth Validations ====================
+// Note: Authentication will be handled by Auth0 (see ARCHITECTURE.md)
+// These schemas are for user registration data captured before Auth0 redirect
 
 export const registerSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
   phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, { message: 'Invalid phone number' }),
-  password: z.string().min(8).optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
@@ -102,7 +103,6 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export const loginSchema = z.object({
   email: z.string().email().optional(),
   phone: z.string().regex(/^\+?[1-9]\d{1,14}$/).optional(),
-  password: z.string().optional(),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -140,11 +140,13 @@ export type TransactionListInput = z.infer<typeof transactionListSchema>;
 
 // ==================== Validation Middleware ====================
 
+import { type Request, type Response, type NextFunction } from 'express';
+
 /**
  * Middleware factory that validates request body against a Zod schema
  */
 export function validateBody<T>(schema: z.ZodSchema<T>) {
-  return (req: any, res: any, next: any) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.body);
 
     if (!result.success) {
@@ -163,7 +165,7 @@ export function validateBody<T>(schema: z.ZodSchema<T>) {
  * Middleware factory that validates query parameters against a Zod schema
  */
 export function validateQuery<T>(schema: z.ZodSchema<T>) {
-  return (req: any, res: any, next: any) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.query);
 
     if (!result.success) {
