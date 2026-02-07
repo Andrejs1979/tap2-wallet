@@ -1,13 +1,13 @@
 name = "tap2-wallet-api"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
-node_compat = true
+nodejs_compat = true
 
 # D1 Database bindings
 [[d1_databases]]
 binding = "DB"
 database_name = "tap2-wallet-db"
-database_id = "local" # Replace with actual database_id in production
+database_id = "e37cda8e-5223-4057-abd3-dc95ec0e7312"
 
 # KV namespace for rate limiting and caching
 [[kv_namespaces]]

@@ -1,5 +1,4 @@
 import { Hono } from 'hono'
-import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { healthRouter } from './routes/v1/health.js'
 import { walletRouter } from './routes/v1/wallet.js'
@@ -26,19 +25,42 @@ app.use('*', async (c, next) => {
   await next()
 })
 
-// CORS middleware
-const allowedOrigins =
-  ENVIRONMENT === 'production'
-    ? ['https://tap2wallet.com', 'https://app.tap2wallet.com']
-    : ['http://localhost:3000', 'http://localhost:19006', 'http://localhost:8081']
+// CORS middleware - get from environment
+app.use('*', async (c, next) => {
+  const env = c.env?.ENVIRONMENT || 'development'
+  const allowedOrigins =
+    env === 'production'
+      ? ['https://tap2wallet.com', 'https://app.tap2wallet.com']
+      : ['http://localhost:3000', 'http://localhost:19006', 'http://localhost:8081']
 
-app.use(
-  '*',
-  cors({
-    origin: allowedOrigins,
-    credentials: true,
-  })
-)
+  // Simple CORS check
+  const origin = c.req.header('Origin')
+  if (origin && allowedOrigins.includes(origin)) {
+    c.header('Access-Control-Allow-Origin', origin)
+    c.header('Access-Control-Allow-Credentials', 'true')
+  }
+
+  await next()
+})
+
+// Handle preflight requests
+app.options('*', (c) => {
+  const env = c.env?.ENVIRONMENT || 'development'
+  const allowedOrigins =
+    env === 'production'
+      ? ['https://tap2wallet.com', 'https://app.tap2wallet.com']
+      : ['http://localhost:3000', 'http://localhost:19006', 'http://localhost:8081']
+
+  const origin = c.req.header('Origin')
+  if (origin && allowedOrigins.includes(origin)) {
+    c.header('Access-Control-Allow-Origin', origin)
+    c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    c.header('Access-Control-Allow-Credentials', 'true')
+  }
+
+  return c.text('', 204 as any)
+})
 
 // Request logging
 app.use('*', logger())
@@ -56,8 +78,8 @@ app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-// API v1 routes
-app.route('/api/v1', healthRouter)
+// API v1 routes - mount health routes directly
+app.route('/api/v1/health', healthRouter)
 app.route('/api/v1/wallet', walletRouter)
 app.route('/api/v1/payments', paymentsRouter)
 
@@ -69,9 +91,10 @@ app.notFound((c) => {
 // Global error handler
 app.onError((err, c) => {
   console.error('Error:', err)
+  const isProduction = c.env?.ENVIRONMENT === 'production'
   return c.json(
     {
-      error: ENVIRONMENT === 'production' ? 'Internal Server Error' : err.message,
+      error: isProduction ? 'Internal Server Error' : err.message,
       status: 500,
     },
     500
