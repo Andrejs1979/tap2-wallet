@@ -98,7 +98,7 @@ describe('WalletService', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma mock
       vi.mocked(prisma.wallet.findFirst).mockResolvedValue(mockWallet as any);
 
-      const result = await walletService.getTransactions('user-123', 20, 0, undefined, undefined, 'PAYMENT');
+      await walletService.getTransactions('user-123', 20, 0, undefined, undefined, 'PAYMENT');
 
       expect(prisma.wallet.findFirst).toHaveBeenCalledWith({
         where: { userId: 'user-123' },

@@ -61,7 +61,7 @@ describe('PaymentService', () => {
 
       vi.mocked(prisma.$transaction).mockImplementation(async (callback) => {
         // Mock the transaction callback
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma transaction mock
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma transaction mock requires any
         const tx = {
           wallet: {
             findUnique: vi.fn()
@@ -76,7 +76,7 @@ describe('PaymentService', () => {
           merchantPayment: {
             create: vi.fn().mockResolvedValue({ id: 'mp-123' }),
           },
-        } as any;
+        } as any; // eslint-disable-line @typescript-eslint/no-explicit-any -- Prisma transaction mock
 
         return await callback(tx);
       });
@@ -107,7 +107,7 @@ describe('PaymentService', () => {
           wallet: {
             findUnique: vi.fn().mockResolvedValue(lowBalanceWallet),
           },
-        } as any;
+        } as any; // eslint-disable-line @typescript-eslint/no-explicit-any -- Prisma transaction mock
 
         return await callback(tx);
       });
@@ -134,7 +134,7 @@ describe('PaymentService', () => {
           wallet: {
             findUnique: vi.fn().mockResolvedValue(null),
           },
-        } as any;
+        } as any; // eslint-disable-line @typescript-eslint/no-explicit-any -- Prisma transaction mock
 
         return await callback(tx);
       });
@@ -195,7 +195,7 @@ describe('PaymentService', () => {
           merchantPayment: {
             update: vi.fn().mockResolvedValue({ completedAt: new Date() }),
           },
-        } as any;
+        } as any; // eslint-disable-line @typescript-eslint/no-explicit-any -- Prisma transaction mock
 
         return await callback(tx);
       });
@@ -229,7 +229,7 @@ describe('PaymentService', () => {
           wallet: {
             update: vi.fn().mockResolvedValue({ balance: 100.0 }),
           },
-        } as any;
+        } as any; // eslint-disable-line @typescript-eslint/no-explicit-any -- Prisma transaction mock
 
         return await callback(tx);
       });

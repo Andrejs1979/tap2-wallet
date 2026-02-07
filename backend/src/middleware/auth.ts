@@ -15,11 +15,9 @@ export interface AuthenticatedRequest extends Omit<Request, 'user'> {
 }
 
 // Extend Express Request type to include user (optional)
-declare global {
-  namespace Express {
-    interface Request {
-      user?: RequestUser;
-    }
+declare module 'express' {
+  export interface Request {
+    user?: RequestUser;
   }
 }
 
@@ -35,7 +33,7 @@ declare global {
  */
 export function authenticate(
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): void {
   // TODO: Sprint 1 - Implement full JWT verification with Auth0 JWKS
@@ -62,7 +60,7 @@ export function authenticate(
  */
 export function optionalAuthenticate(
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): void {
   const userId = req.headers['x-user-id'] as string;

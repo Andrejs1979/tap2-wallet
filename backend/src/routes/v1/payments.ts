@@ -1,4 +1,4 @@
-import { Router, type Response, type NextFunction } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { PaymentService } from '../../services/payment.service.js';
 import { merchantPaymentSchema, nfcInitiateSchema, qrPaymentSchema, validateBody } from '../../utils/validation.js';
 import type { MerchantPaymentInput, NFCInitiateInput, QRPaymentInput } from '../../utils/validation.js';
@@ -64,6 +64,7 @@ paymentsRouter.post('/qr/process', validateBody(qrPaymentSchema), async (req: Re
   try {
     // TODO: Sprint 3 - Implement QR code payment logic
     // Parse QR code and process payment
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Will be used in Sprint 3
     const { qrData } = req.body as QRPaymentInput;
     const paymentId = `qr-${Date.now()}`;
 
