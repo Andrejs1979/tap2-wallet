@@ -5,17 +5,20 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.dev.vars
+.wrangler/
 
 # Build output
 dist/
+.wrangler/
 
 # Logs
 logs/
 *.log
 npm-debug.log*
 
-# Prisma (keep migration SQL in git, ignore lock file)
-prisma/migration_lock.toml
+# Drizzle (keep migration SQL in git, ignore lock file)
+drizzle/migration_lock.toml
 
 # IDE
 .vscode/
@@ -29,3 +32,6 @@ Thumbs.db
 # Testing
 coverage/
 .nyc_output/
+
+# Cloudflare Workers
+.mf/

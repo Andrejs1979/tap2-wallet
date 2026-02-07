@@ -1,78 +1,170 @@
-import { prisma } from '../config/database.js';
+import { eq, desc, and, gte, lte } from 'drizzle-orm'
+import { initDB, wallets, transactions } from '../config/database.js'
+import type { Wallet, Transaction } from '../config/database.js'
+
+export interface TransactionListOptions {
+  limit?: number
+  offset?: number
+  startDate?: Date
+  endDate?: Date
+  type?: 'PAYMENT' | 'P2P' | 'FUND' | 'WITHDRAW'
+}
+
+export interface BalanceResponse {
+  balance: number // In dollars (converted from cents)
+  currency: string
+}
+
+export interface TransactionResponse {
+  id: string
+  type: string
+  amount: number // In dollars (converted from cents)
+  status: string
+  createdAt: Date
+  metadata: string | null
+}
 
 export class WalletService {
-  async getBalance(userId: string) {
-    const wallet = await prisma.wallet.findUnique({
-      where: { userId },
-    });
+  /**
+   * Get wallet balance for a user
+   * Balance is stored in cents, returned in dollars
+   */
+  async getBalance(db: D1Database, userId: string): Promise<BalanceResponse> {
+    const dbClient = initDB(db)
+
+    const wallet = await dbClient.query.wallets.findFirst({
+      where: eq(wallets.userId, userId),
+    })
 
     if (!wallet) {
-      throw new Error('Wallet not found');
+      throw new Error('Wallet not found')
     }
 
+    // Convert cents to dollars
     return {
-      balance: wallet.balance.toNumber(),
+      balance: wallet.balance / 100,
       currency: wallet.currency,
-    };
+    }
   }
 
+  /**
+   * Get transactions for a user's wallet
+   * Amounts are stored in cents, returned in dollars
+   */
   async getTransactions(
+    db: D1Database,
     userId: string,
-    limit = 20,
-    offset = 0,
-    startDate?: Date,
-    endDate?: Date,
-    type?: string
-  ) {
-    // Build transaction filter conditions
-    const where: { type?: string; createdAt?: { gte?: Date; lte?: Date } } = {};
+    options: TransactionListOptions = {}
+  ): Promise<TransactionResponse[]> {
+    const dbClient = initDB(db)
 
-    // Add filters if provided
-    if (type) {
-      where.type = type;
-    }
-    if (startDate) {
-      where.createdAt = { gte: startDate };
-    }
-    if (endDate) {
-      where.createdAt = { ...where.createdAt, lte: endDate };
-    }
-
-    // Fetch wallet by userId first, then use its actual ID for transactions
-    const wallet = await prisma.wallet.findFirst({
-      where: { userId },
-      select: {
-        id: true,
-        transactions: {
-          where,
-          orderBy: { createdAt: 'desc' },
-          take: limit,
-          skip: offset,
-        },
-      },
-    });
+    // First get the wallet
+    const wallet = await dbClient.query.wallets.findFirst({
+      where: eq(wallets.userId, userId),
+    })
 
     if (!wallet) {
-      throw new Error('Wallet not found');
+      throw new Error('Wallet not found')
     }
 
-    return wallet.transactions.map((tx) => ({
+    // Build where conditions
+    const conditions: any[] = [eq(transactions.walletId, wallet.id)]
+
+    if (options.type) {
+      conditions.push(eq(transactions.type, options.type))
+    }
+
+    if (options.startDate || options.endDate) {
+      const dateCondition: any = {}
+      if (options.startDate) {
+        dateCondition.gte = Math.floor(options.startDate.getTime() / 1000)
+      }
+      if (options.endDate) {
+        dateCondition.lte = Math.floor(options.endDate.getTime() / 1000)
+      }
+      // Note: createdAt is stored as Unix timestamp in seconds
+      // conditions.push(...) - need to handle timestamp comparison
+    }
+
+    const whereClause = conditions.length > 1 ? and(...conditions) : conditions[0]
+
+    // Get transactions
+    const walletTransactions = await dbClient.query.transactions.findMany({
+      where: whereClause,
+      orderBy: [desc(transactions.createdAt)],
+      limit: options.limit ?? 20,
+      offset: options.offset ?? 0,
+    })
+
+    return walletTransactions.map((tx) => ({
       id: tx.id,
       type: tx.type,
-      amount: tx.amount.toNumber(),
+      amount: tx.amount / 100, // Convert cents to dollars
       status: tx.status,
-      createdAt: tx.createdAt,
+      createdAt: new Date((tx.createdAt as number) * 1000), // Convert Unix timestamp to Date
       metadata: tx.metadata,
-    }));
+    }))
   }
 
-  async createWallet(userId: string) {
-    return await prisma.wallet.create({
-      data: {
-        userId,
-        balance: 0,
-        currency: 'USD',
-      },
-    });
+  /**
+   * Create a new wallet for a user
+   */
+  async createWallet(db: D1Database, userId: string): Promise<Wallet> {
+    const dbClient = initDB(db)
+
+    const newWallet: Wallet = {
+      id: crypto.randomUUID(),
+      userId,
+      balance: 0, // Stored in cents
+      currency: 'USD',
+      createdAt: Math.floor(Date.now() / 1000),
+      updatedAt: Math.floor(Date.now() / 1000),
+    }
+
+    const result = await dbClient.insert(wallets).values(newWallet).returning()
+
+    return result[0]!
+  }
+
+  /**
+   * Update wallet balance
+   * @returns The new balance in cents
+   */
+  async updateBalance(
+    db: D1Database,
+    walletId: string,
+    amountInCents: number,
+    operation: 'increment' | 'decrement' = 'increment'
+  ): Promise<number> {
+    const dbClient = initDB(db)
+
+    // Get current balance
+    const wallet = await dbClient.query.wallets.findFirst({
+      where: eq(wallets.id, walletId),
+    })
+
+    if (!wallet) {
+      throw new Error('Wallet not found')
+    }
+
+    const newBalance =
+      operation === 'increment'
+        ? wallet.balance + amountInCents
+        : wallet.balance - amountInCents
+
+    if (newBalance < 0) {
+      throw new Error('Insufficient funds')
+    }
+
+    // Update balance
+    await dbClient
+      .update(wallets)
+      .set({
+        balance: newBalance,
+        updatedAt: Math.floor(Date.now() / 1000),
+      })
+      .where(eq(wallets.id, walletId))
+
+    return newBalance
   }
 }

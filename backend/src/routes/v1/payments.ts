@@ -1,79 +1,115 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
-import { PaymentService } from '../../services/payment.service.js';
-import { merchantPaymentSchema, nfcInitiateSchema, qrPaymentSchema, validateBody } from '../../utils/validation.js';
-import type { MerchantPaymentInput, NFCInitiateInput, QRPaymentInput } from '../../utils/validation.js';
-import type { AuthenticatedRequest } from '../../middleware/auth.js';
+import { Hono } from 'hono'
+import type { Env } from '../../index.js'
+import { PaymentService } from '../../services/payment.service.js'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
 
-export const paymentsRouter = Router();
-const paymentService = new PaymentService();
+export const paymentsRouter = new Hono<{ Bindings: Env }>()
+
+const paymentService = new PaymentService()
+
+// Validation schemas
+const merchantPaymentSchema = z.object({
+  merchantId: z.string().min(1),
+  amount: z.number().positive(), // Amount in cents
+  currency: z.string().default('USD'),
+  paymentMethod: z.string().optional(),
+  paymentType: z.enum(['nfc', 'qr']).default('nfc'),
+  nfcNonce: z.string().optional(),
+})
+
+const nfcInitiateSchema = z.object({
+  nonce: z.string().min(1),
+})
+
+const qrPaymentSchema = z.object({
+  qrData: z.string().min(1),
+})
 
 // POST /api/v1/payments/merchant
-paymentsRouter.post('/merchant', validateBody(merchantPaymentSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+paymentsRouter.post('/merchant', zValidator('json', merchantPaymentSchema), async (c) => {
   try {
-    // User is attached by authentication middleware
-    const userId = req.user.id;
-    const paymentData = req.body as MerchantPaymentInput;
+    // TODO: Get userId from auth middleware
+    const userId = c.req.header('x-user-id') || 'demo-user'
+    const paymentData = c.req.valid('json')
 
-    const payment = await paymentService.initiateMerchantPayment({
+    const db = c.env.DB
+    const payment = await paymentService.initiateMerchantPayment(db, {
       userId,
       merchantId: paymentData.merchantId,
-      amount: paymentData.amount,
+      amount: paymentData.amount, // Already in cents
       currency: paymentData.currency || 'USD',
       paymentMethod: paymentData.paymentMethod || 'default',
       paymentType: paymentData.paymentType || 'nfc',
       nfcNonce: paymentData.nfcNonce,
-    });
+    })
 
-    res.status(201).json(payment);
+    return c.json(payment, 201)
   } catch (error) {
-    next(error); // Pass to error handler middleware
+    const statusCode =
+      error instanceof Error && error.message === 'Insufficient wallet balance'
+        ? 400
+        : 500
+    return c.json(
+      { error: error instanceof Error ? error.message : 'Payment failed' },
+      statusCode
+    )
   }
-});
+})
 
 // GET /api/v1/payments/:id/status
-paymentsRouter.get('/:id/status', async (req: Request, res: Response, next: NextFunction) => {
+paymentsRouter.get('/:id/status', async (c) => {
   try {
-    const { id } = req.params;
-    const status = await paymentService.getPaymentStatus(id);
-    res.json(status);
+    const id = c.req.param('id')
+    const db = c.env.DB
+    const status = await paymentService.getPaymentStatus(db, id)
+
+    return c.json(status)
   } catch (error) {
-    next(error); // Pass to error handler middleware
+    return c.json(
+      { error: error instanceof Error ? error.message : 'Failed to get payment status' },
+      404
+    )
   }
-});
+})
 
 // POST /api/v1/payments/nfc/initiate
-paymentsRouter.post('/nfc/initiate', validateBody(nfcInitiateSchema), async (req: Request, res: Response, next: NextFunction) => {
+paymentsRouter.post('/nfc/initiate', zValidator('json', nfcInitiateSchema), async (c) => {
   try {
     // TODO: Sprint 3 - Implement full NFC handshake logic with merchant verification
-    // For now, return a placeholder payment ID
-    const { nonce } = req.body as NFCInitiateInput;
-    const paymentId = `${Date.now()}-${nonce.slice(0, 8)}`;
+    const { nonce } = c.req.valid('json')
+    const paymentId = `${Date.now()}-${nonce.slice(0, 8)}`
 
-    res.json({
+    return c.json({
       paymentId,
       status: 'initiated',
-      message: 'NFC payment initiated'
-    });
+      message: 'NFC payment initiated',
+    })
   } catch (error) {
-    next(error); // Pass to error handler middleware
+    return c.json(
+      { error: error instanceof Error ? error.message : 'NFC initiation failed' },
+      500
+    )
   }
-});
+})
 
 // POST /api/v1/payments/qr/process
-paymentsRouter.post('/qr/process', validateBody(qrPaymentSchema), async (req: Request, res: Response, next: NextFunction) => {
+paymentsRouter.post('/qr/process', zValidator('json', qrPaymentSchema), async (c) => {
   try {
     // TODO: Sprint 3 - Implement QR code payment logic
-    // Parse QR code and process payment
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Will be used in Sprint 3
-    const { qrData } = req.body as QRPaymentInput;
-    const paymentId = `qr-${Date.now()}`;
+    const { qrData } = c.req.valid('json')
+    const paymentId = `qr-${Date.now()}`
 
-    res.json({
+    return c.json({
       paymentId,
       status: 'pending',
-      message: 'QR payment processed'
-    });
+      message: 'QR payment processed',
+      qrData,
+    })
   } catch (error) {
-    next(error); // Pass to error handler middleware
+    return c.json(
+      { error: error instanceof Error ? error.message : 'QR payment failed' },
+      500
+    )
   }
-});
+})

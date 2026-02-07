@@ -1,24 +1,25 @@
-import { Router } from 'express';
-import { prisma } from '../../config/database.js';
+import { Hono } from 'hono'
+import type { Env } from '../../index.js'
+import { healthCheck } from '../../config/database.js'
 
-export const healthRouter = Router();
+export const healthRouter = new Hono<{ Bindings: Env }>()
 
-healthRouter.get('/', async (req, res) => {
-  try {
-    // Check database connection
-    await prisma.$queryRaw`SELECT 1`;
+healthRouter.get('/', async (c) => {
+  const dbHealth = await healthCheck(c.env.DB)
 
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      database: 'connected',
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      database: 'disconnected',
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
+  return c.json({
+    status: dbHealth ? 'ok' : 'error',
+    timestamp: new Date().toISOString(),
+    database: dbHealth ? 'connected' : 'disconnected',
+  })
+})
+
+healthRouter.get('/db', async (c) => {
+  const dbHealth = await healthCheck(c.env.DB)
+
+  if (dbHealth) {
+    return c.json({ status: 'ok', database: 'connected' })
   }
-});
+
+  return c.json({ status: 'error', database: 'disconnected' }, 503)
+})

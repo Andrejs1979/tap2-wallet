@@ -1,49 +1,80 @@
-import { prisma } from '../config/database.js';
+import { eq } from 'drizzle-orm'
+import { initDB, users, wallets } from '../config/database.js'
+import type { User, NewUser, Wallet } from '../config/database.js'
 
 export class UserService {
-  async findByEmail(email: string) {
-    return await prisma.user.findUnique({
-      where: { email },
-    });
+  async findByEmail(db: D1Database, email: string) {
+    const dbClient = initDB(db)
+    return await dbClient.query.users.findFirst({
+      where: eq(users.email, email),
+    })
   }
 
-  async findByPhone(phone: string) {
-    return await prisma.user.findUnique({
-      where: { phone },
-    });
+  async findByPhone(db: D1Database, phone: string) {
+    const dbClient = initDB(db)
+    return await dbClient.query.users.findFirst({
+      where: eq(users.phone, phone),
+    })
   }
 
-  async findByAuth0Id(auth0Id: string) {
-    return await prisma.user.findUnique({
-      where: { auth0Id },
-      include: { wallet: true },
-    });
+  async findByAuth0Id(db: D1Database, auth0Id: string) {
+    const dbClient = initDB(db)
+    return await dbClient.query.users.findFirst({
+      where: eq(users.auth0Id, auth0Id),
+      with: {
+        wallet: true,
+      },
+    })
   }
 
-  async createUser(data: { email: string; phone: string; auth0Id?: string }) {
-    const user = await prisma.user.create({
-      data,
-    });
+  async createUser(
+    db: D1Database,
+    data: { email: string; phone: string; auth0Id?: string }
+  ): Promise<User> {
+    const dbClient = initDB(db)
+
+    const newUser: NewUser = {
+      id: crypto.randomUUID(),
+      email: data.email,
+      phone: data.phone,
+      auth0Id: data.auth0Id,
+      kycVerified: false,
+      createdAt: Math.floor(Date.now() / 1000),
+      updatedAt: Math.floor(Date.now() / 1000),
+    }
+
+    const result = await dbClient.insert(users).values(newUser).returning()
 
     // Create wallet for new user
-    await prisma.wallet.create({
-      data: {
-        userId: user.id,
-        balance: 0,
-        currency: 'USD',
-      },
-    });
+    const newWallet: Wallet = {
+      id: crypto.randomUUID(),
+      userId: newUser.id,
+      balance: 0, // Stored in cents
+      currency: 'USD',
+      createdAt: Math.floor(Date.now() / 1000),
+      updatedAt: Math.floor(Date.now() / 1000),
+    }
 
-    return user;
+    await dbClient.insert(wallets).values(newWallet)
+
+    return result[0]!
   }
 
-  async updateKYC(userId: string, verified: boolean) {
-    return await prisma.user.update({
-      where: { id: userId },
-      data: {
+  async updateKYC(db: D1Database, userId: string, verified: boolean) {
+    const dbClient = initDB(db)
+
+    await dbClient
+      .update(users)
+      .set({
         kycVerified: verified,
-        kycVerifiedAt: verified ? new Date() : null,
-      },
-    });
+        kycVerifiedAt: verified ? Math.floor(Date.now() / 1000) : null,
+        updatedAt: Math.floor(Date.now() / 1000),
+      })
+      .where(eq(users.id, userId))
+
+    // Return updated user
+    return await dbClient.query.users.findFirst({
+      where: eq(users.id, userId),
+    })
   }
 }

@@ -1,43 +1,26 @@
-import { PrismaClient } from '@prisma/client';
-
-// Create a singleton instance
-const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-});
+import { drizzle } from 'drizzle-orm/d1'
+import * as schema from '../../drizzle/schema.js'
 
 /**
- * Test database connection
- * Called on server startup to verify database is reachable
+ * Initialize Drizzle ORM with D1 database binding
+ * This is called in each Cloudflare Worker request handler
  */
-export async function connectDatabase(): Promise<void> {
-  try {
-    await prisma.$connect();
-    console.log('✅ Database connected');
-  } catch (error) {
-    console.error('❌ Database connection failed:', error);
-    throw error;
-  }
-}
-
-/**
- * Disconnect database on shutdown
- */
-export async function disconnectDatabase(): Promise<void> {
-  await prisma.$disconnect();
-  console.log('Database disconnected');
+export function initDB(db: D1Database) {
+  return drizzle(db, { schema })
 }
 
 /**
  * Health check for database connectivity
+ * For D1, this runs a simple query to verify connection
  */
-export async function healthCheck(): Promise<boolean> {
+export async function healthCheck(db: D1Database): Promise<boolean> {
   try {
-    await prisma.$queryRaw`SELECT 1`;
-    return true;
+    await db.prepare('SELECT 1').first()
+    return true
   } catch {
-    return false;
+    return false
   }
 }
 
-export { prisma };
-
+// Re-export schema for convenience
+export * from '../../drizzle/schema.js'
