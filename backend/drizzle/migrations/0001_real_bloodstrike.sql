@@ -1,0 +1,23 @@
+CREATE INDEX `merchant_payments_merchant_id_idx` ON `merchant_payments` (`merchant_id`);--> statement-breakpoint
+CREATE INDEX `merchant_payments_merchant_created_idx` ON `merchant_payments` (`merchant_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `merchant_payments_payment_type_idx` ON `merchant_payments` (`payment_type`);--> statement-breakpoint
+CREATE INDEX `merchants_tap2_id_idx` ON `merchants` (`tap2_id`);--> statement-breakpoint
+CREATE INDEX `merchants_is_active_idx` ON `merchants` (`is_active`);--> statement-breakpoint
+CREATE INDEX `p2p_transfers_status_idx` ON `p2p_transfers` (`status`);--> statement-breakpoint
+CREATE INDEX `p2p_transfers_expires_at_idx` ON `p2p_transfers` (`expires_at`);--> statement-breakpoint
+CREATE INDEX `p2p_transfers_sender_created_idx` ON `p2p_transfers` (`sender_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `p2p_transfers_recipient_created_idx` ON `p2p_transfers` (`recipient_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `payment_methods_user_id_idx` ON `payment_methods` (`user_id`);--> statement-breakpoint
+CREATE INDEX `payment_methods_user_type_idx` ON `payment_methods` (`user_id`,`type`);--> statement-breakpoint
+CREATE INDEX `rewards_user_id_idx` ON `rewards` (`user_id`);--> statement-breakpoint
+CREATE INDEX `rewards_user_expires_idx` ON `rewards` (`user_id`,`expires_at`);--> statement-breakpoint
+CREATE INDEX `rewards_merchant_id_idx` ON `rewards` (`merchant_id`);--> statement-breakpoint
+CREATE INDEX `transactions_wallet_id_idx` ON `transactions` (`wallet_id`);--> statement-breakpoint
+CREATE INDEX `transactions_status_idx` ON `transactions` (`status`);--> statement-breakpoint
+CREATE INDEX `transactions_type_idx` ON `transactions` (`type`);--> statement-breakpoint
+CREATE INDEX `transactions_created_at_idx` ON `transactions` (`created_at`);--> statement-breakpoint
+CREATE INDEX `transactions_wallet_created_idx` ON `transactions` (`wallet_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `users_email_idx` ON `users` (`email`);--> statement-breakpoint
+CREATE INDEX `users_phone_idx` ON `users` (`phone`);--> statement-breakpoint
+CREATE INDEX `users_auth0_id_idx` ON `users` (`auth0_id`);--> statement-breakpoint
+CREATE INDEX `wallets_user_id_idx` ON `wallets` (`user_id`);
