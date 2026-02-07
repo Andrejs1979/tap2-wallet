@@ -29,8 +29,7 @@
 │       │                    │                    │               │
 │       ▼                    ▼                    ▼               │
 │  ┌──────────────────────────────────────────────────┐         │
-│  │     PostgreSQL (Neon/Supabase)                   │         │
-│  │     via Cloudflare Tunnel / Direct Connection    │         │
+│  │           Cloudflare D1 (SQLite)                 │         │
 │  └──────────────────────────────────────────────────┘         │
 │                                                                   │
 └─────────────────────────────────────────────────────────────────┘
@@ -55,10 +54,10 @@
 | Component | Technology | Rationale |
 |-----------|------------|-----------|
 | API Runtime | Cloudflare Workers / Pages Functions | Edge compute, global distribution |
-| Framework | Hono / itty-router | Lightweight, edge-optimized |
+| Framework | Hono | Lightweight, edge-optimized, TypeScript-first |
 | Language | TypeScript | Type safety |
-| Database | PostgreSQL (Neon/Supabase) | ACID compliance for financial data |
-| ORM | Prisma | Type-safe ORM |
+| Database | Cloudflare D1 | Edge-native SQLite, zero cold starts |
+| ORM | Drizzle ORM | Type-safe, lightweight, D1-optimized |
 | Auth | Auth0 | OAuth2, social logins |
 | KYC | Persona | Identity verification |
 | Payments | Stripe | Card processing, payouts |
@@ -72,7 +71,7 @@
 | Cloud Platform | Cloudflare | All cloud services on single platform |
 | Compute | Cloudflare Workers / Pages Functions | Edge deployment, global latency |
 | CDN | Cloudflare CDN | Built-in to platform |
-| Database | PostgreSQL via Neon/Supabase | ACID compliance, edge-friendly |
+| Database | Cloudflare D1 | Edge-native SQLite, global replication |
 | Storage | Cloudflare R2 / KV | Object storage, key-value cache |
 | Monitoring | Sentry | Error tracking |
 | Analytics | Cloudflare Web Analytics / Mixpanel | User analytics |
@@ -148,58 +147,124 @@ PUT    /v1/auth/profile
 
 ## Database Schema
 
-### Users Table
+### D1 Schema (SQLite)
+
+**Users Table**
 ```sql
 CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email VARCHAR(255) UNIQUE NOT NULL,
-  phone VARCHAR(20) UNIQUE NOT NULL,
-  auth0_id VARCHAR(255) UNIQUE,
-  kyc_verified BOOLEAN DEFAULT FALSE,
-  kyc_verified_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  id TEXT PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  phone TEXT UNIQUE NOT NULL,
+  auth0_id TEXT UNIQUE,
+  kyc_verified INTEGER DEFAULT 0,
+  kyc_verified_at TEXT,
+  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_auth0_id ON users(auth0_id);
 ```
 
-### Wallets Table
+**Wallets Table**
 ```sql
 CREATE TABLE wallets (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id),
-  balance DECIMAL(10, 2) DEFAULT 0,
-  currency VARCHAR(3) DEFAULT 'USD',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  balance INTEGER DEFAULT 0,  -- Stored as cents (1/100 of currency unit)
+  currency TEXT DEFAULT 'USD',
+  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
+CREATE INDEX idx_wallets_user_id ON wallets(user_id);
 ```
 
-### Transactions Table
+**Transactions Table**
 ```sql
 CREATE TABLE transactions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  wallet_id UUID REFERENCES wallets(id),
-  type VARCHAR(20) NOT NULL, -- 'payment', 'p2p', 'fund', 'withdraw'
-  amount DECIMAL(10, 2) NOT NULL,
-  status VARCHAR(20) DEFAULT 'pending',
-  reference_id VARCHAR(255),
-  metadata JSONB,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  id TEXT PRIMARY KEY,
+  wallet_id TEXT NOT NULL REFERENCES wallets(id),
+  type TEXT NOT NULL,  -- 'payment', 'p2p', 'fund', 'withdraw'
+  amount INTEGER NOT NULL,  -- Stored as cents
+  status TEXT DEFAULT 'pending',
+  reference_id TEXT,
+  metadata TEXT,  -- JSON string
+  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
+CREATE INDEX idx_transactions_wallet_id ON transactions(wallet_id);
+CREATE INDEX idx_transactions_status ON transactions(status);
+CREATE INDEX idx_transactions_created_at ON transactions(created_at);
 ```
 
-### Rewards Table
+**Rewards Table**
 ```sql
 CREATE TABLE rewards (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id),
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
   points INTEGER DEFAULT 0,
-  merchant_id VARCHAR(255),
-  transaction_id UUID REFERENCES transactions(id),
-  expires_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  merchant_id TEXT,
+  transaction_id TEXT REFERENCES transactions(id),
+  expires_at TEXT,
+  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
+CREATE INDEX idx_rewards_user_id ON rewards(user_id);
+CREATE INDEX idx_rewards_expires_at ON rewards(expires_at);
 ```
+
+### Drizzle ORM Schema Example
+
+```typescript
+import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { sql } from 'drizzle-orm'
+
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  phone: text('phone').notNull().unique(),
+  auth0Id: text('auth0_id').unique(),
+  kycVerified: integer('kyc_verified', { mode: 'boolean' }).default(false),
+  kycVerifiedAt: text('kyc_verified_at'),
+  createdAt: text('created_at').default(sql`strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`),
+  updatedAt: text('updated_at').default(sql`strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`),
+})
+
+export const wallets = sqliteTable('wallets', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id),
+  balance: integer('balance').default(0),  // Cents
+  currency: text('currency').default('USD'),
+  createdAt: text('created_at').default(sql`strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`),
+  updatedAt: text('updated_at').default(sql`strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`),
+})
+
+export const transactions = sqliteTable('transactions', {
+  id: text('id').primaryKey(),
+  walletId: text('wallet_id').notNull().references(() => wallets.id),
+  type: text('type').notNull(),  // 'payment', 'p2p', 'fund', 'withdraw'
+  amount: integer('amount').notNull(),  // Cents
+  status: text('status').default('pending'),
+  referenceId: text('reference_id'),
+  metadata: text('metadata'),  // JSON string
+  createdAt: text('created_at').default(sql`strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`),
+})
+```
+
+### Financial Data Handling
+
+**Storing Amounts as Integers (Cents):**
+- SQLite doesn't have a native `DECIMAL` type
+- Store all monetary values as integers (cents)
+- `$100.50` → `10050`
+- Convert on read/write in application layer
+
+**UUIDs as TEXT:**
+- SQLite doesn't have native UUID type
+- Store as TEXT, generate in application layer
+- Use `crypto.randomUUID()` in Workers
+
+**Metadata as JSON:**
+- SQLite has JSON functions but D1 support is limited
+- Store as TEXT, parse in application
+- For complex queries, consider Durable Objects instead
 
 ## Security Considerations
 
@@ -255,25 +320,51 @@ CREATE TABLE rewards (
 |---------|---------|-------|
 | **Workers** | API compute | Edge Functions, sub-millisecond cold starts |
 | **Pages Functions** | Full-stack deployments | For static + dynamic content |
+| **D1** | Database | Edge SQLite, global replication |
 | **KV** | Key-value storage | Fast reads, rate limiting, session data |
 | **R2** | Object storage | User files, receipts, profile images |
 | **Queues** | Async jobs | Webhook processing, notifications |
 | **Durable Objects** | Stateful operations | Real-time features, strong consistency |
 | **Analytics** | Request metrics | Built-in, no extra code needed |
-| **Zero Trust** | Access control | Internal tool access, mTLS for DB |
+| **Zero Trust** | Access control | Internal tool access |
 
-### Database Connectivity
+### Database: D1 + Drizzle
 
+**Why D1?**
+- **Edge-Native**: Data co-located with Workers, zero latency
+- **Automatic Replication**: Multi-region primary with read replicas
+- **Serverless**: Pay-per-query, no connection management
+- **SQLite**: Familiar SQL dialect, battle-tested
+
+**Why Drizzle?**
+- **D1 Optimized**: First-class Cloudflare Workers support
+- **Type-Safe**: TypeScript schema definitions
+- **Lightweight**: Smaller bundle than Prisma, faster cold starts
+- **SQL-like**: No migration black box, you control the queries
+- **No Schema Engine**: Unlike Prisma, doesn't require external binary
+
+```typescript
+// Cloudflare Worker with D1 + Drizzle
+import { drizzle } from 'drizzle-orm/d1'
+import { users, wallets } from './schema'
+
+export interface Env {
+  DB: D1Database
+}
+
+export default {
+  async fetch(request: Request, env: Env) {
+    const db = drizzle(env.DB)
+
+    const wallet = await db.query.wallets.findFirst({
+      where: eq(wallets.userId, userId),
+      with: { user: true }
+    })
+
+    return Response.json(wallet)
+  }
+}
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ Cloudflare      │────▶│ Cloudflare      │────▶│ PostgreSQL      │
-│ Workers         │     │ Tunnel / Direct │     │ (Neon/Supabase) │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-```
-
-Two options for database connection:
-1. **Cloudflare Tunnel**: Secure, private connection to any PostgreSQL
-2. **Direct**: Neon/Supabase with edge-friendly connection pooling
 
 ### Rate Limiting Strategy
 
@@ -307,7 +398,7 @@ Per-user and per-IP limits with auto-expiration.
 
 ### Scalability
 - **Automatic**: Cloudflare Workers auto-scale globally
-- **Database**: Neon/Supabase read replicas
+- **Database**: D1 automatic multi-region replication
 - **Caching**: Cloudflare KV for frequently-accessed data
 - **Queues**: Cloudflare Queues for async operations (webhooks, notifications)
 - **Durable Objects**: For stateful operations requiring strong consistency
