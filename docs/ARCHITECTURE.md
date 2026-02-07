@@ -15,22 +15,23 @@
 │           └───────────┬─────────────┘                            │
 │                       │                                          │
 │                       ▼                                          │
-│           ┌───────────────────────┐                             │
-│           │   Tap2 Wallet API     │                             │
-│           │   (Node.js/Express)   │                             │
-│           └───────────┬───────────┘                             │
-│                       │                                          │
-│       ┌───────────────┼───────────────┐                          │
-│       ▼               ▼               ▼                          │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐                    │
-│  │ Wallet   │   │ Rewards  │   │ Identity │                    │
-│  │ Service  │   │ Service  │   │ Service  │                    │
-│  └────┬─────┘   └────┬─────┘   └────┬─────┘                    │
-│       │              │              │                            │
-│       ▼              ▼              ▼                            │
-│  ┌──────────────────────────────────────┐                      │
-│  │         PostgreSQL Database          │                      │
-│  └──────────────────────────────────────┘                      │
+│           ┌─────────────────────────────────────┐                │
+│           │       Cloudflare Edge Network       │                │
+│           │   (Workers / Pages Functions)       │                │
+│           └─────────────────┬───────────────────┘                │
+│                             │                                    │
+│       ┌─────────────────────┼─────────────────────┐              │
+│       ▼                     ▼                     ▼              │
+│  ┌──────────┐         ┌──────────┐         ┌──────────┐        │
+│  │ Wallet   │         │ Rewards  │         │ Identity │        │
+│  │ Service  │         │ Service  │         │ Service  │        │
+│  └────┬─────┘         └────┬─────┘         └────┬─────┘        │
+│       │                    │                    │               │
+│       ▼                    ▼                    ▼               │
+│  ┌──────────────────────────────────────────────────┐         │
+│  │     PostgreSQL (Neon/Supabase)                   │         │
+│  │     via Cloudflare Tunnel / Direct Connection    │         │
+│  └──────────────────────────────────────────────────┘         │
 │                                                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -53,22 +54,29 @@
 
 | Component | Technology | Rationale |
 |-----------|------------|-----------|
-| API | Node.js + Express | TypeScript, async I/O |
-| Database | PostgreSQL | ACID compliance for financial data |
+| API Runtime | Cloudflare Workers / Pages Functions | Edge compute, global distribution |
+| Framework | Hono / itty-router | Lightweight, edge-optimized |
+| Language | TypeScript | Type safety |
+| Database | PostgreSQL (Neon/Supabase) | ACID compliance for financial data |
 | ORM | Prisma | Type-safe ORM |
 | Auth | Auth0 | OAuth2, social logins |
 | KYC | Persona | Identity verification |
 | Payments | Stripe | Card processing, payouts |
+| Queue | Cloudflare Queues | Async job processing |
+| Cache | Cloudflare KV | Fast edge reads, rate limiting |
 
 ### Infrastructure
 
 | Component | Technology | Rationale |
 |-----------|------------|-----------|
-| Hosting | AWS / Fly.io | Scalable hosting |
-| CDN | CloudFront | Asset delivery |
+| Cloud Platform | Cloudflare | All cloud services on single platform |
+| Compute | Cloudflare Workers / Pages Functions | Edge deployment, global latency |
+| CDN | Cloudflare CDN | Built-in to platform |
+| Database | PostgreSQL via Neon/Supabase | ACID compliance, edge-friendly |
+| Storage | Cloudflare R2 / KV | Object storage, key-value cache |
 | Monitoring | Sentry | Error tracking |
-| Analytics | Mixpanel | User analytics |
-| CI/CD | GitHub Actions | Automated deployments |
+| Analytics | Cloudflare Web Analytics / Mixpanel | User analytics |
+| CI/CD | GitHub Actions + Wrangler | Automated deployments |
 
 ## Service Boundaries
 
@@ -231,6 +239,54 @@ CREATE TABLE rewards (
 - Database connection issues
 - Unusual transaction patterns
 
+## Cloudflare Architecture
+
+### Why Cloudflare?
+
+- **Global Edge**: Code runs in 300+ locations worldwide, reducing latency
+- **Unified Platform**: Compute, storage, database, DNS on one provider
+- **DDoS Protection**: Built-in mitigation at no extra cost
+- **Cost Effective**: Pay-per-request, no idle server costs
+- **Developer Experience**: Wrangler CLI, TypeScript-first, fast deployments
+
+### Cloudflare Services Used
+
+| Service | Purpose | Notes |
+|---------|---------|-------|
+| **Workers** | API compute | Edge Functions, sub-millisecond cold starts |
+| **Pages Functions** | Full-stack deployments | For static + dynamic content |
+| **KV** | Key-value storage | Fast reads, rate limiting, session data |
+| **R2** | Object storage | User files, receipts, profile images |
+| **Queues** | Async jobs | Webhook processing, notifications |
+| **Durable Objects** | Stateful operations | Real-time features, strong consistency |
+| **Analytics** | Request metrics | Built-in, no extra code needed |
+| **Zero Trust** | Access control | Internal tool access, mTLS for DB |
+
+### Database Connectivity
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ Cloudflare      │────▶│ Cloudflare      │────▶│ PostgreSQL      │
+│ Workers         │     │ Tunnel / Direct │     │ (Neon/Supabase) │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+Two options for database connection:
+1. **Cloudflare Tunnel**: Secure, private connection to any PostgreSQL
+2. **Direct**: Neon/Supabase with edge-friendly connection pooling
+
+### Rate Limiting Strategy
+
+Using Cloudflare KV + Workers:
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│ User Request │────▶│ KV Check     │────▶│ Allow/Deny   │
+│              │     │ (rate limit) │     │              │
+└──────────────┘     └──────────────┘     └──────────────┘
+```
+
+Per-user and per-IP limits with auto-expiration.
+
 ## Deployment Strategy
 
 ### Environments
@@ -241,18 +297,20 @@ CREATE TABLE rewards (
 ### CI/CD Pipeline
 1. Code push triggers GitHub Actions
 2. Run tests (unit, integration, E2E)
-3. Build Docker images
-4. Deploy to staging
+3. Build Workers bundle (`wrangler deploy`)
+4. Deploy to Cloudflare Workers preview (staging)
 5. Run smoke tests
 6. Promote to production (manual approval)
+7. Route traffic via Cloudflare DNS
 
 ## Future Considerations
 
 ### Scalability
-- Horizontal scaling for API servers
-- Database read replicas
-- Redis caching layer
-- Message queue for async operations
+- **Automatic**: Cloudflare Workers auto-scale globally
+- **Database**: Neon/Supabase read replicas
+- **Caching**: Cloudflare KV for frequently-accessed data
+- **Queues**: Cloudflare Queues for async operations (webhooks, notifications)
+- **Durable Objects**: For stateful operations requiring strong consistency
 
 ### Feature Expansion
 - Virtual card integration
