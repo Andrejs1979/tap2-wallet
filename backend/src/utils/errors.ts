@@ -32,7 +32,7 @@ export class ValidationError extends AppError {
 
 export class InsufficientFundsError extends AppError {
   constructor(message: string = 'Insufficient funds') {
-    super(message, 400, 'INSUFFICIENT_FUNDS');
+    super(message, 400, 'ERR_PAY_002');
     this.name = 'InsufficientFundsError';
   }
 }

@@ -173,5 +173,17 @@ describe('WalletService', () => {
         },
       });
     });
+
+    it('should handle duplicate wallet creation error', async () => {
+      const prismaError = new Error('Unique constraint failed');
+      (prismaError as { code?: string }).code = 'P2002';
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma mock
+      vi.mocked(prisma.wallet.create).mockRejectedValue(prismaError as any);
+
+      await expect(walletService.createWallet('user-123')).rejects.toThrow(
+        'Unique constraint failed'
+      );
+    });
   });
 });
