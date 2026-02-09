@@ -1,27 +1,27 @@
-import { eq, desc, and, gte, lte } from 'drizzle-orm'
-import { initDB, wallets, transactions } from '../config/database.js'
-import type { Wallet, Transaction } from '../config/database.js'
+import { eq, desc, and, gte, lte } from 'drizzle-orm';
+import { initDB, wallets, transactions } from '../config/database.js';
+import type { Wallet, Transaction } from '../config/database.js';
 
 export interface TransactionListOptions {
-  limit?: number
-  offset?: number
-  startDate?: Date
-  endDate?: Date
-  type?: 'PAYMENT' | 'P2P' | 'FUND' | 'WITHDRAW'
+  limit?: number;
+  offset?: number;
+  startDate?: Date;
+  endDate?: Date;
+  type?: 'PAYMENT' | 'P2P' | 'FUND' | 'WITHDRAW';
 }
 
 export interface BalanceResponse {
-  balance: number // In dollars (converted from cents)
-  currency: string
+  balance: number; // In dollars (converted from cents)
+  currency: string;
 }
 
 export interface TransactionResponse {
-  id: string
-  type: string
-  amount: number // In dollars (converted from cents)
-  status: string
-  createdAt: Date
-  metadata: string | null
+  id: string;
+  type: string;
+  amount: number; // In dollars (converted from cents)
+  status: string;
+  createdAt: Date;
+  metadata: string | null;
 }
 
 export class WalletService {
@@ -30,21 +30,21 @@ export class WalletService {
    * Balance is stored in cents, returned in dollars
    */
   async getBalance(db: D1Database, userId: string): Promise<BalanceResponse> {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
 
     const wallet = await dbClient.query.wallets.findFirst({
       where: eq(wallets.userId, userId),
-    })
+    });
 
     if (!wallet) {
-      throw new Error('Wallet not found')
+      throw new Error('Wallet not found');
     }
 
     // Convert cents to dollars
     return {
       balance: wallet.balance / 100,
       currency: wallet.currency,
-    }
+    };
   }
 
   /**
@@ -56,37 +56,37 @@ export class WalletService {
     userId: string,
     options: TransactionListOptions = {}
   ): Promise<TransactionResponse[]> {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
 
     // First get the wallet
     const wallet = await dbClient.query.wallets.findFirst({
       where: eq(wallets.userId, userId),
-    })
+    });
 
     if (!wallet) {
-      throw new Error('Wallet not found')
+      throw new Error('Wallet not found');
     }
 
     // Build where conditions
-    const conditions: any[] = [eq(transactions.walletId, wallet.id)]
+    const conditions: any[] = [eq(transactions.walletId, wallet.id)];
 
     if (options.type) {
-      conditions.push(eq(transactions.type, options.type))
+      conditions.push(eq(transactions.type, options.type));
     }
 
     if (options.startDate || options.endDate) {
-      const dateCondition: any = {}
+      const dateCondition: any = {};
       if (options.startDate) {
-        dateCondition.gte = Math.floor(options.startDate.getTime() / 1000)
+        dateCondition.gte = Math.floor(options.startDate.getTime() / 1000);
       }
       if (options.endDate) {
-        dateCondition.lte = Math.floor(options.endDate.getTime() / 1000)
+        dateCondition.lte = Math.floor(options.endDate.getTime() / 1000);
       }
       // Note: createdAt is stored as Unix timestamp in seconds
       // conditions.push(...) - need to handle timestamp comparison
     }
 
-    const whereClause = conditions.length > 1 ? and(...conditions) : conditions[0]
+    const whereClause = conditions.length > 1 ? and(...conditions) : conditions[0];
 
     // Get transactions
     const walletTransactions = await dbClient.query.transactions.findMany({
@@ -94,7 +94,7 @@ export class WalletService {
       orderBy: [desc(transactions.createdAt)],
       limit: options.limit ?? 20,
       offset: options.offset ?? 0,
-    })
+    });
 
     return walletTransactions.map((tx) => ({
       id: tx.id,
@@ -103,14 +103,14 @@ export class WalletService {
       status: tx.status,
       createdAt: new Date((tx.createdAt as number) * 1000), // Convert Unix timestamp to Date
       metadata: tx.metadata,
-    }))
+    }));
   }
 
   /**
    * Create a new wallet for a user
    */
   async createWallet(db: D1Database, userId: string): Promise<Wallet> {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
 
     const newWallet: Wallet = {
       id: crypto.randomUUID(),
@@ -119,11 +119,11 @@ export class WalletService {
       currency: 'USD',
       createdAt: Math.floor(Date.now() / 1000),
       updatedAt: Math.floor(Date.now() / 1000),
-    }
+    };
 
-    const result = await dbClient.insert(wallets).values(newWallet).returning()
+    const result = await dbClient.insert(wallets).values(newWallet).returning();
 
-    return result[0]!
+    return result[0]!;
   }
 
   /**
@@ -136,24 +136,22 @@ export class WalletService {
     amountInCents: number,
     operation: 'increment' | 'decrement' = 'increment'
   ): Promise<number> {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
 
     // Get current balance
     const wallet = await dbClient.query.wallets.findFirst({
       where: eq(wallets.id, walletId),
-    })
+    });
 
     if (!wallet) {
-      throw new Error('Wallet not found')
+      throw new Error('Wallet not found');
     }
 
     const newBalance =
-      operation === 'increment'
-        ? wallet.balance + amountInCents
-        : wallet.balance - amountInCents
+      operation === 'increment' ? wallet.balance + amountInCents : wallet.balance - amountInCents;
 
     if (newBalance < 0) {
-      throw new Error('Insufficient funds')
+      throw new Error('Insufficient funds');
     }
 
     // Update balance
@@ -163,8 +161,8 @@ export class WalletService {
         balance: newBalance,
         updatedAt: Math.floor(Date.now() / 1000),
       })
-      .where(eq(wallets.id, walletId))
+      .where(eq(wallets.id, walletId));
 
-    return newBalance
+    return newBalance;
   }
 }

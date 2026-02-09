@@ -1,37 +1,37 @@
-import { eq } from 'drizzle-orm'
-import { initDB, users, wallets } from '../config/database.js'
-import type { User, NewUser, Wallet } from '../config/database.js'
+import { eq } from 'drizzle-orm';
+import { initDB, users, wallets } from '../config/database.js';
+import type { User, NewUser, Wallet } from '../config/database.js';
 
 export class UserService {
   async findByEmail(db: D1Database, email: string) {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
     return await dbClient.query.users.findFirst({
       where: eq(users.email, email),
-    })
+    });
   }
 
   async findByPhone(db: D1Database, phone: string) {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
     return await dbClient.query.users.findFirst({
       where: eq(users.phone, phone),
-    })
+    });
   }
 
   async findByAuth0Id(db: D1Database, auth0Id: string) {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
     return await dbClient.query.users.findFirst({
       where: eq(users.auth0Id, auth0Id),
       with: {
         wallet: true,
       },
-    })
+    });
   }
 
   async createUser(
     db: D1Database,
     data: { email: string; phone: string; auth0Id?: string }
   ): Promise<User> {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
 
     const newUser: NewUser = {
       id: crypto.randomUUID(),
@@ -41,9 +41,9 @@ export class UserService {
       kycVerified: false,
       createdAt: Math.floor(Date.now() / 1000),
       updatedAt: Math.floor(Date.now() / 1000),
-    }
+    };
 
-    const result = await dbClient.insert(users).values(newUser).returning()
+    const result = await dbClient.insert(users).values(newUser).returning();
 
     // Create wallet for new user
     const newWallet: Wallet = {
@@ -53,15 +53,15 @@ export class UserService {
       currency: 'USD',
       createdAt: Math.floor(Date.now() / 1000),
       updatedAt: Math.floor(Date.now() / 1000),
-    }
+    };
 
-    await dbClient.insert(wallets).values(newWallet)
+    await dbClient.insert(wallets).values(newWallet);
 
-    return result[0]!
+    return result[0]!;
   }
 
   async updateKYC(db: D1Database, userId: string, verified: boolean) {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
 
     await dbClient
       .update(users)
@@ -70,11 +70,11 @@ export class UserService {
         kycVerifiedAt: verified ? Math.floor(Date.now() / 1000) : null,
         updatedAt: Math.floor(Date.now() / 1000),
       })
-      .where(eq(users.id, userId))
+      .where(eq(users.id, userId));
 
     // Return updated user
     return await dbClient.query.users.findFirst({
       where: eq(users.id, userId),
-    })
+    });
   }
 }

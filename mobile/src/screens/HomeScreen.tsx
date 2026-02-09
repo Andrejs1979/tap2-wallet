@@ -11,13 +11,8 @@ export function HomeScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Welcome to Tap2 Wallet</Text>
-      <Text style={styles.subtitle}>
-        Your digital wallet for tap-to-pay payments
-      </Text>
-      <Pressable
-        style={styles.tapButton}
-        onPress={handleTap}
-      >
+      <Text style={styles.subtitle}>Your digital wallet for tap-to-pay payments</Text>
+      <Pressable style={styles.tapButton} onPress={handleTap}>
         <Text style={styles.buttonText}>Tap to Pay</Text>
       </Pressable>
       <Text style={styles.balance}>Balance: $0.00</Text>

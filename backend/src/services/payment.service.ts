@@ -1,24 +1,24 @@
-import { eq } from 'drizzle-orm'
-import { initDB, wallets, transactions, merchantPayments, merchants } from '../config/database.js'
-import type { MerchantPayment as MerchantPaymentSchema } from '../config/database.js'
+import { eq } from 'drizzle-orm';
+import { initDB, wallets, transactions, merchantPayments, merchants } from '../config/database.js';
+import type { MerchantPayment as MerchantPaymentSchema } from '../config/database.js';
 
 export interface MerchantPaymentInput {
-  userId: string
-  merchantId: string
-  amount: number // Amount in cents
-  currency: string
-  paymentMethod?: string
-  paymentType?: 'nfc' | 'qr'
-  nfcNonce?: string
+  userId: string;
+  merchantId: string;
+  amount: number; // Amount in cents
+  currency: string;
+  paymentMethod?: string;
+  paymentType?: 'nfc' | 'qr';
+  nfcNonce?: string;
 }
 
 export interface PaymentResponse {
-  paymentId: string
-  status: string
-  amount: number // Amount in dollars (for display)
-  currency: string
-  timestamp: Date
-  newBalance: number // Balance in dollars (for display)
+  paymentId: string;
+  status: string;
+  amount: number; // Amount in dollars (for display)
+  currency: string;
+  timestamp: Date;
+  newBalance: number; // Balance in dollars (for display)
 }
 
 export class PaymentService {
@@ -31,7 +31,7 @@ export class PaymentService {
     db: D1Database,
     input: MerchantPaymentInput
   ): Promise<PaymentResponse> {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
 
     // D1 doesn't support full SQL transactions like PostgreSQL,
     // but we can use batch operations for atomicity
@@ -40,29 +40,29 @@ export class PaymentService {
     // Get user's wallet
     const wallet = await dbClient.query.wallets.findFirst({
       where: eq(wallets.userId, input.userId),
-    })
+    });
 
     if (!wallet) {
-      throw new Error('Wallet not found')
+      throw new Error('Wallet not found');
     }
 
     // Check balance (stored in cents)
     if (wallet.balance < input.amount) {
-      throw new Error('Insufficient wallet balance')
+      throw new Error('Insufficient wallet balance');
     }
 
     // Deduct from wallet balance
-    const newBalanceCents = wallet.balance - input.amount
+    const newBalanceCents = wallet.balance - input.amount;
     await dbClient
       .update(wallets)
       .set({
         balance: newBalanceCents,
         updatedAt: Math.floor(Date.now() / 1000),
       })
-      .where(eq(wallets.id, wallet.id))
+      .where(eq(wallets.id, wallet.id));
 
     // Create transaction record
-    const transactionId = crypto.randomUUID()
+    const transactionId = crypto.randomUUID();
     await dbClient.insert(transactions).values({
       id: transactionId,
       walletId: wallet.id,
@@ -76,10 +76,10 @@ export class PaymentService {
         nfcNonce: input.nfcNonce,
       }),
       createdAt: Math.floor(Date.now() / 1000),
-    })
+    });
 
     // Create merchant payment record
-    const paymentId = crypto.randomUUID()
+    const paymentId = crypto.randomUUID();
     await dbClient.insert(merchantPayments).values({
       id: paymentId,
       transactionId,
@@ -88,21 +88,21 @@ export class PaymentService {
       nfcNonce: input.nfcNonce,
       tipAmount: 0,
       createdAt: Math.floor(Date.now() / 1000),
-    })
+    });
 
     // TODO: Sprint 2/3 - Process payment with Stripe
     // For now, mark as completed immediately
     await dbClient
       .update(transactions)
       .set({ status: 'COMPLETED' })
-      .where(eq(transactions.id, transactionId))
+      .where(eq(transactions.id, transactionId));
 
     await dbClient
       .update(merchantPayments)
       .set({
         completedAt: Math.floor(Date.now() / 1000),
       })
-      .where(eq(merchantPayments.transactionId, transactionId))
+      .where(eq(merchantPayments.transactionId, transactionId));
 
     return {
       paymentId: transactionId,
@@ -111,24 +111,24 @@ export class PaymentService {
       currency: input.currency,
       timestamp: new Date(),
       newBalance: newBalanceCents / 100, // Convert cents to dollars for display
-    }
+    };
   }
 
   async getPaymentStatus(
     db: D1Database,
     paymentId: string
   ): Promise<PaymentResponse | { merchantId: string; createdAt: Date } | null> {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
 
     const transaction = await dbClient.query.transactions.findFirst({
       where: eq(transactions.id, paymentId),
       with: {
         merchantPayment: true,
       },
-    })
+    });
 
     if (!transaction) {
-      return null
+      return null;
     }
 
     return {
@@ -138,23 +138,23 @@ export class PaymentService {
       currency: 'USD',
       timestamp: new Date((transaction.createdAt as number) * 1000),
       newBalance: 0, // Would need to fetch current wallet balance
-    }
+    };
   }
 
   async completePayment(db: D1Database, paymentId: string): Promise<void> {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
 
     await dbClient
       .update(transactions)
       .set({ status: 'COMPLETED' })
-      .where(eq(transactions.id, paymentId))
+      .where(eq(transactions.id, paymentId));
 
     await dbClient
       .update(merchantPayments)
       .set({
         completedAt: Math.floor(Date.now() / 1000),
       })
-      .where(eq(merchantPayments.transactionId, paymentId))
+      .where(eq(merchantPayments.transactionId, paymentId));
   }
 
   async failPayment(
@@ -162,7 +162,7 @@ export class PaymentService {
     paymentId: string,
     reason: string
   ): Promise<{ paymentId: string; status: string; reason: string }> {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
 
     // Get transaction with wallet for refund
     const transaction = await dbClient.query.transactions.findFirst({
@@ -170,10 +170,10 @@ export class PaymentService {
       with: {
         wallet: true,
       },
-    })
+    });
 
     if (!transaction) {
-      throw new Error('Payment not found')
+      throw new Error('Payment not found');
     }
 
     // Refund the amount back to wallet
@@ -184,7 +184,7 @@ export class PaymentService {
           balance: transaction.wallet.balance + transaction.amount,
           updatedAt: Math.floor(Date.now() / 1000),
         })
-        .where(eq(wallets.id, transaction.wallet.id))
+        .where(eq(wallets.id, transaction.wallet.id));
     }
 
     // Update transaction status
@@ -194,9 +194,9 @@ export class PaymentService {
         status: 'FAILED',
         metadata: JSON.stringify({ failureReason: reason }),
       })
-      .where(eq(transactions.id, paymentId))
+      .where(eq(transactions.id, paymentId));
 
-    return { paymentId, status: 'failed', reason }
+    return { paymentId, status: 'failed', reason };
   }
 
   /**
@@ -209,21 +209,21 @@ export class PaymentService {
     offset = 0
   ): Promise<
     Array<{
-      id: string
-      amount: number
-      status: string
-      createdAt: Date
-      merchant?: string
+      id: string;
+      amount: number;
+      status: string;
+      createdAt: Date;
+      merchant?: string;
     }>
   > {
-    const dbClient = initDB(db)
+    const dbClient = initDB(db);
 
     const wallet = await dbClient.query.wallets.findFirst({
       where: eq(wallets.userId, userId),
-    })
+    });
 
     if (!wallet) {
-      throw new Error('Wallet not found')
+      throw new Error('Wallet not found');
     }
 
     const walletTransactions = await dbClient.query.transactions.findMany({
@@ -231,13 +231,13 @@ export class PaymentService {
       limit,
       offset,
       orderBy: (transactions, { desc }) => [desc(transactions.createdAt)],
-    })
+    });
 
     return walletTransactions.map((tx) => ({
       id: tx.id,
       amount: tx.amount / 100,
       status: tx.status.toLowerCase(),
       createdAt: new Date((tx.createdAt as number) * 1000),
-    }))
+    }));
   }
 }
