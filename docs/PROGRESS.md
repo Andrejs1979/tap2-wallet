@@ -2,11 +2,11 @@
 
 ## Current Sprint
 
-**Sprint**: Foundation Setup
+**Sprint**: Authentication & Identity
 **Dates**: February 2026
-**Status**: Sprint 0 Complete - Ready for Sprint 1
+**Status**: Sprint 0 Complete, Sprint 1 In Progress
 
-### Completed ✅
+### Sprint 0: Foundation ✅ Complete
 
 **Planning & Requirements:**
 
@@ -52,16 +52,33 @@
 - [x] Initial API routes (health, wallet, payments)
 - [x] Database migrations
 
-### In Progress 🚧
+### Sprint 1: Authentication & Identity 🚧 In Progress
 
-- [ ] PR #29: Prettier and CI/CD workflows (pending merge)
+**Backend Authentication (Completed):**
 
-### Upcoming 📋
+- [x] Custom authentication implementation (edge-native Cloudflare Workers)
+- [x] Argon2id password hashing
+- [x] JWT token management with key rotation support
+- [x] KV-based rate limiting
+- [x] Auth middleware for protected routes
+- [x] Database schema for users, sessions, mfa_secrets
+- [x] Auth endpoints: register, login, logout, refresh
+- [x] PR #36: Custom Authentication implementation
 
-- [ ] Sprint 1: Authentication & Identity
-- [ ] Auth0 integration
-- [ ] Persona KYC integration
-- [ ] Biometric authentication
+**Mobile Authentication (Pending):**
+
+- [ ] Mobile auth context & services (React Native)
+- [ ] Replace Auth0 SDK in mobile app with custom auth API client
+- [ ] Biometric authentication service (Face ID/Touch ID) - screens already exist
+- [ ] PIN setup and verification screens - screens already exist
+- [ ] KYC verification screen (placeholder for Persona SDK)
+
+**Integration Tasks:**
+
+- [ ] Integrate Persona SDK for KYC verification
+- [ ] Test on physical device (biometrics require real hardware)
+- [ ] Add loading screen for auth initialization
+- [ ] Implement forgot password flow (placeholder exists)
 
 ## Implementation Plans
 
@@ -75,15 +92,15 @@
 
 ## Next Tasks
 
-1. **Merge PR #29** - Prettier and CI/CD workflows
-2. **Begin Sprint 1** - Authentication & Identity
-   - Integrate Auth0 for user authentication
-   - Implement secure token storage (Keychain/Keystore)
-   - Build registration and login screens
-   - Integrate Persona KYC SDK
-   - Implement biometric authentication
+1. **Mobile Auth Integration** - Replace Auth0 mobile SDK with custom auth API
+   - Create API client for auth endpoints
+   - Update AuthContext to use custom auth
+   - Keep existing biometric and PIN screens
+2. **Merge PR #36** - Custom Authentication backend
+3. **Continue Sprint 1** - Complete remaining mobile auth tasks
+4. **Begin Sprint 2** - Wallet Core (after Sprint 1 complete)
 
-See [SPRINTS.md](SPRINTS.md) for Sprint 1 details.
+See [SPRINTS.md](SPRINTS.md) for Sprint details.
 
 ## Blockers
 
@@ -91,12 +108,20 @@ None currently.
 
 ## Recent Changes
 
+**2026-02-09:**
+
+- ✅ PR #36 created: Custom Authentication implementation
+  - Argon2id password hashing (OWASP compliant)
+  - JWT token management with key versioning
+  - KV-based rate limiting
+  - Auth endpoints: register, login, logout, refresh
+  - Database schema updated for custom auth
+
 **2026-02-08:**
 
 - ✅ Deployed marketing website to https://tap2-wallet-marketing.pages.dev
 - ✅ Set up Prettier, pre-commit hooks (husky, lint-staged)
 - ✅ Created GitHub Actions CI/CD workflows
-- 🔄 PR #29 open: Prettier and CI/CD workflows (pending merge)
 
 **2026-02-05:**
 
@@ -108,6 +133,6 @@ None currently.
 
 - This is a greenfield project
 - Target platforms: iOS and Android (React Native)
-- Tech stack: Node.js/Express backend, PostgreSQL, Auth0, Stripe
+- Tech stack: Node.js, Cloudflare Workers, D1 database, Custom Auth (not Auth0)
 - See [ARCHITECTURE.md](ARCHITECTURE.md) for system design
 - See [SPRINTS.md](SPRINTS.md) for sprint breakdown
