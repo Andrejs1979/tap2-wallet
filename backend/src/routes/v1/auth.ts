@@ -316,16 +316,13 @@ auth.post(
     // Find user by email
     const [user] = await db.select().from(users).where(eq(users.email, body.email));
 
-    if (!user || !user.passwordHash) {
-      // Don't reveal if user exists
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Slow down
-      return c.json({ error: 'Invalid credentials' }, 401);
-    }
+    // Verify password to prevent timing attacks.
+    // We ALWAYS run verifyPassword, even when user doesn't exist.
+    // This ensures timing is consistent regardless of whether the user exists.
+    const passwordValid =
+      user?.passwordHash && (await verifyPassword(body.password, user.passwordHash));
 
-    // Verify password
-    const passwordValid = await verifyPassword(body.password, user.passwordHash);
     if (!passwordValid) {
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Slow down
       return c.json({ error: 'Invalid credentials' }, 401);
     }
 
